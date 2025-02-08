@@ -1,4 +1,3 @@
-
 import * as tf from '@tensorflow/tfjs';
 import Tesseract from 'tesseract.js';
 
@@ -29,7 +28,7 @@ const preprocessImage = async (imageData: string): Promise<tf.Tensor3D> => {
   return tensor.squeeze() as tf.Tensor3D;
 };
 
-const calculateCenteringScore = (tensor: tf.Tensor3D): number => {
+const calculateCentering = (tensor: tf.Tensor3D): number => {
   const moments = tf.moments(tensor);
   const center = moments.mean.dataSync();
   
@@ -45,22 +44,18 @@ const calculateCenteringScore = (tensor: tf.Tensor3D): number => {
 const calculateCornersScore = async (tensor: tf.Tensor3D): Promise<number> => {
   const edges = tf.tidy(() => {
     const grayscale = tensor.mean(-1);
-    const kernelData = [
-      [[[[-1]], [[0]], [[1]]]],
-      [[[[-2]], [[0]], [[2]]]],
-      [[[[-1]], [[0]], [[1]]]]
-    ];
-    
-    const sobelHKernel = tf.tensor4d(kernelData.flat(2), [3, 3, 1, 1]);
-    const sobelVKernel = tf.tensor4d([
-      [[[[-1]], [[-2]], [[-1]]]],
-      [[[[0]], [[0]], [[0]]]],
-      [[[[1]], [[2]], [[1]]]]
-    ].flat(2), [3, 3, 1, 1]);
+    const sobelHKernel = tf.tensor4d(
+      [-1, 0, 1, -2, 0, 2, -1, 0, 1],
+      [3, 3, 1, 1]
+    );
+    const sobelVKernel = tf.tensor4d(
+      [-1, -2, -1, 0, 0, 0, 1, 2, 1],
+      [3, 3, 1, 1]
+    );
     
     const expandedGray = grayscale.expandDims(-1);
-    const sobelH = tf.conv2d(expandedGray, sobelHKernel, 1, 'same');
-    const sobelV = tf.conv2d(expandedGray, sobelVKernel, 1, 'same');
+    const sobelH = tf.conv2d(expandedGray as tf.Tensor4D, sobelHKernel, 1, 'same');
+    const sobelV = tf.conv2d(expandedGray as tf.Tensor4D, sobelVKernel, 1, 'same');
     
     return tf.sqrt(tf.add(tf.square(sobelH), tf.square(sobelV)));
   });
@@ -84,22 +79,18 @@ const calculateCornersScore = async (tensor: tf.Tensor3D): Promise<number> => {
 const calculateEdgesScore = (tensor: tf.Tensor3D): number => {
   const edgeStrength = tf.tidy(() => {
     const grayscale = tensor.mean(-1);
-    const kernelData = [
-      [[[[-1]], [[0]], [[1]]]],
-      [[[[-2]], [[0]], [[2]]]],
-      [[[[-1]], [[0]], [[1]]]]
-    ];
-    
-    const sobelHKernel = tf.tensor4d(kernelData.flat(2), [3, 3, 1, 1]);
-    const sobelVKernel = tf.tensor4d([
-      [[[[-1]], [[-2]], [[-1]]]],
-      [[[[0]], [[0]], [[0]]]],
-      [[[[1]], [[2]], [[1]]]]
-    ].flat(2), [3, 3, 1, 1]);
+    const sobelHKernel = tf.tensor4d(
+      [-1, 0, 1, -2, 0, 2, -1, 0, 1],
+      [3, 3, 1, 1]
+    );
+    const sobelVKernel = tf.tensor4d(
+      [-1, -2, -1, 0, 0, 0, 1, 2, 1],
+      [3, 3, 1, 1]
+    );
     
     const expandedGray = grayscale.expandDims(-1);
-    const sobelH = tf.conv2d(expandedGray, sobelHKernel, 1, 'same');
-    const sobelV = tf.conv2d(expandedGray, sobelVKernel, 1, 'same');
+    const sobelH = tf.conv2d(expandedGray as tf.Tensor4D, sobelHKernel, 1, 'same');
+    const sobelV = tf.conv2d(expandedGray as tf.Tensor4D, sobelVKernel, 1, 'same');
     
     return tf.sqrt(tf.add(tf.square(sobelH), tf.square(sobelV))).mean();
   });
@@ -111,16 +102,13 @@ const calculateEdgesScore = (tensor: tf.Tensor3D): number => {
 const calculateSurfaceScore = (tensor: tf.Tensor3D): number => {
   const laplacian = tf.tidy(() => {
     const grayscale = tensor.mean(-1);
-    const kernelData = [
-      [[[[-0]], [[1]], [[0]]]],
-      [[[[1]], [[-4]], [[1]]]],
-      [[[[-0]], [[1]], [[0]]]]
-    ];
+    const laplacianKernel = tf.tensor4d(
+      [0, 1, 0, 1, -4, 1, 0, 1, 0],
+      [3, 3, 1, 1]
+    );
     
-    const laplacianKernel = tf.tensor4d(kernelData.flat(2), [3, 3, 1, 1]);
     const expandedGray = grayscale.expandDims(-1);
-    
-    return tf.conv2d(expandedGray, laplacianKernel, 1, 'same');
+    return tf.conv2d(expandedGray as tf.Tensor4D, laplacianKernel, 1, 'same');
   });
   
   const variance = tf.moments(laplacian).variance.dataSync()[0];
@@ -143,7 +131,7 @@ export const analyzeCard = async (
     const tensorFront = await preprocessImage(frontImage);
     
     const [centeringScore, cornersScore, edgesScore, surfaceScore] = await Promise.all([
-      calculateCenteringScore(tensorFront),
+      calculateCentering(tensorFront),
       calculateCornersScore(tensorFront),
       calculateEdgesScore(tensorFront),
       calculateSurfaceScore(tensorFront)
