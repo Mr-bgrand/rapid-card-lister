@@ -1,6 +1,6 @@
 
 import { useState, useRef } from "react";
-import { Camera, X, Share2, ArrowRight, Upload, Loader2 } from "lucide-react";
+import { Camera, X, Share2, ArrowRight, Upload, Loader2, Image as ImageIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
@@ -30,46 +30,42 @@ const Index = () => {
   const [salesHistory, setSalesHistory] = useState<EbaySale[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [setList, setSetList] = useState<File | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const startCamera = async (type: "front" | "back") => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-      }
-    } catch (error) {
-      toast.error("Unable to access camera");
-      console.error("Camera error:", error);
+    if (fileInputRef.current) {
+      fileInputRef.current.setAttribute('capture', 'environment');
+      fileInputRef.current.setAttribute('accept', 'image/*');
+      fileInputRef.current.setAttribute('data-type', type);
+      fileInputRef.current.click();
     }
   };
 
-  const handleCapture = async (type: "front" | "back") => {
-    if (!videoRef.current) return;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    const ctx = canvas.getContext('2d');
-    
-    if (ctx && videoRef.current) {
-      ctx.drawImage(videoRef.current, 0, 0);
-      const imageData = canvas.toDataURL('image/jpeg');
-      setImages((prev) => ({ ...prev, [type]: imageData }));
-
-      // Stop camera stream after capture
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+  const selectFromLibrary = (type: "front" | "back") => {
+    if (fileInputRef.current) {
+      fileInputRef.current.removeAttribute('capture');
+      fileInputRef.current.setAttribute('accept', 'image/*');
+      fileInputRef.current.setAttribute('data-type', type);
+      fileInputRef.current.click();
     }
+  };
 
-    // If both images are captured, trigger analysis
-    if (type === "back" && images.front || type === "front" && images.back) {
-      analyzeCard();
+  const handleImageInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const type = event.target.getAttribute('data-type') as "front" | "back";
+    
+    if (file && type) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageData = e.target?.result as string;
+        setImages((prev) => ({ ...prev, [type]: imageData }));
+
+        // If both images are captured, trigger analysis
+        if (type === "back" && images.front || type === "front" && images.back) {
+          analyzeCard();
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -142,7 +138,6 @@ const Index = () => {
       });
 
       // Fetch eBay sales history
-      // In production, replace with actual eBay API call
       const salesResponse = await fetch('/api/sales-history');
       if (salesResponse.ok) {
         const salesData = await salesResponse.json();
@@ -201,12 +196,13 @@ const Index = () => {
           <p className="text-sm text-gray-500 mt-1">Capture your card to list on eBay</p>
         </motion.div>
 
-        {/* Video Preview (hidden by default) */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
+        {/* Hidden file input */}
+        <input
+          type="file"
+          ref={fileInputRef}
           className="hidden"
+          onChange={handleImageInput}
+          accept="image/*"
         />
 
         {/* Card Capture Section */}
@@ -233,13 +229,22 @@ const Index = () => {
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => startCamera(side as "front" | "back")}
-                  className="w-full h-48 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center bg-white transition-all hover:border-gray-400 active:bg-gray-50"
-                >
-                  <Camera className="w-6 h-6 text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-500 capitalize">{side}</span>
-                </button>
+                <div className="flex flex-col space-y-2">
+                  <button
+                    onClick={() => startCamera(side as "front" | "back")}
+                    className="w-full h-36 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center bg-white transition-all hover:border-gray-400 active:bg-gray-50"
+                  >
+                    <Camera className="w-6 h-6 text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-500 capitalize">Take {side}</span>
+                  </button>
+                  <button
+                    onClick={() => selectFromLibrary(side as "front" | "back")}
+                    className="w-full py-2 px-3 rounded-xl border border-gray-200 flex items-center justify-center space-x-2 bg-white hover:bg-gray-50"
+                  >
+                    <ImageIcon className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-600">Choose from library</span>
+                  </button>
+                </div>
               )}
             </motion.div>
           ))}
