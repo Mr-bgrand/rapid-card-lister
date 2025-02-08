@@ -46,17 +46,17 @@ const calculateCornersScore = async (tensor: tf.Tensor3D): Promise<number> => {
   const edges = tf.tidy(() => {
     const grayscale = tensor.mean(-1);
     const kernelData = [
-      [[-1], [0], [1]],
-      [[-2], [0], [2]],
-      [[-1], [0], [1]]
+      [[[[-1]], [[0]], [[1]]]],
+      [[[[-2]], [[0]], [[2]]]],
+      [[[[-1]], [[0]], [[1]]]]
     ];
     
-    const sobelHKernel = tf.tensor4d(kernelData, [3, 3, 1, 1]);
+    const sobelHKernel = tf.tensor4d(kernelData.flat(2), [3, 3, 1, 1]);
     const sobelVKernel = tf.tensor4d([
-      [[-1], [-2], [-1]],
-      [[0], [0], [0]],
-      [[1], [2], [1]]
-    ], [3, 3, 1, 1]);
+      [[[[-1]], [[-2]], [[-1]]]],
+      [[[[0]], [[0]], [[0]]]],
+      [[[[1]], [[2]], [[1]]]]
+    ].flat(2), [3, 3, 1, 1]);
     
     const expandedGray = grayscale.expandDims(-1);
     const sobelH = tf.conv2d(expandedGray, sobelHKernel, 1, 'same');
@@ -85,17 +85,17 @@ const calculateEdgesScore = (tensor: tf.Tensor3D): number => {
   const edgeStrength = tf.tidy(() => {
     const grayscale = tensor.mean(-1);
     const kernelData = [
-      [[-1], [0], [1]],
-      [[-2], [0], [2]],
-      [[-1], [0], [1]]
+      [[[[-1]], [[0]], [[1]]]],
+      [[[[-2]], [[0]], [[2]]]],
+      [[[[-1]], [[0]], [[1]]]]
     ];
     
-    const sobelHKernel = tf.tensor4d(kernelData, [3, 3, 1, 1]);
+    const sobelHKernel = tf.tensor4d(kernelData.flat(2), [3, 3, 1, 1]);
     const sobelVKernel = tf.tensor4d([
-      [[-1], [-2], [-1]],
-      [[0], [0], [0]],
-      [[1], [2], [1]]
-    ], [3, 3, 1, 1]);
+      [[[[-1]], [[-2]], [[-1]]]],
+      [[[[0]], [[0]], [[0]]]],
+      [[[[1]], [[2]], [[1]]]]
+    ].flat(2), [3, 3, 1, 1]);
     
     const expandedGray = grayscale.expandDims(-1);
     const sobelH = tf.conv2d(expandedGray, sobelHKernel, 1, 'same');
@@ -112,12 +112,12 @@ const calculateSurfaceScore = (tensor: tf.Tensor3D): number => {
   const laplacian = tf.tidy(() => {
     const grayscale = tensor.mean(-1);
     const kernelData = [
-      [[0], [1], [0]],
-      [[1], [-4], [1]],
-      [[0], [1], [0]]
+      [[[[-0]], [[1]], [[0]]]],
+      [[[[1]], [[-4]], [[1]]]],
+      [[[[-0]], [[1]], [[0]]]]
     ];
     
-    const laplacianKernel = tf.tensor4d(kernelData, [3, 3, 1, 1]);
+    const laplacianKernel = tf.tensor4d(kernelData.flat(2), [3, 3, 1, 1]);
     const expandedGray = grayscale.expandDims(-1);
     
     return tf.conv2d(expandedGray, laplacianKernel, 1, 'same');
