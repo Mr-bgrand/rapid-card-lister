@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { Camera, X, Share2, ArrowRight, Upload, Loader2, Image as ImageIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { analyzeCard, type CardGradingResult } from '../utils/imageProcessing';
 
 interface CardAnalysis {
   grade: number;
@@ -69,7 +70,23 @@ const Index = () => {
           setImages((prev) => ({ ...prev, [type]: imageData }));
 
           if (type === "back" && images.front || type === "front" && images.back) {
-            await analyzeCard();
+            setIsAnalyzing(true);
+            try {
+              const result = await analyzeCard(
+                type === "front" ? imageData : images.front!,
+                type === "back" ? imageData : images.back!
+              );
+              
+              setAnalysis(result);
+              const salesData = await fetchEbaySales(result);
+              setSalesHistory(salesData);
+              toast.success("Card analysis complete!");
+            } catch (error) {
+              toast.error("Error analyzing card");
+              console.error("Analysis error:", error);
+            } finally {
+              setIsAnalyzing(false);
+            }
           }
         };
         reader.readAsDataURL(file);
@@ -134,53 +151,6 @@ const Index = () => {
     } catch (error) {
       console.error("eBay API error:", error);
       throw error;
-    }
-  };
-
-  const analyzeCard = async () => {
-    if (!images.front || !images.back) return;
-    
-    setIsAnalyzing(true);
-    try {
-      const [frontBlob, backBlob] = await Promise.all([
-        preprocessImage(images.front),
-        preprocessImage(images.back)
-      ]);
-
-      const formData = new FormData();
-      formData.append('frontImage', frontBlob);
-      formData.append('backImage', backBlob);
-
-      const [gradingResponse, salesData] = await Promise.all([
-        fetch('https://api.cardgrader.com/grade', {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Authorization': 'Bearer YOUR_GRADING_API_KEY'
-          }
-        }),
-        fetchEbaySales({ grade: 8.5, centering: 9.0, corners: 8.5, surface: 8.0, edges: 8.5 })
-      ]);
-
-      if (!gradingResponse.ok) throw new Error('Grading API request failed');
-      
-      const gradingData = await gradingResponse.json();
-      
-      setAnalysis({
-        grade: gradingData.grade || 8.5,
-        centering: gradingData.centering || 9.0,
-        corners: gradingData.corners || 8.5,
-        surface: gradingData.surface || 8.0,
-        edges: gradingData.edges || 8.5
-      });
-
-      setSalesHistory(salesData);
-      toast.success("Card analysis complete!");
-    } catch (error) {
-      toast.error("Error analyzing card");
-      console.error("Analysis error:", error);
-    } finally {
-      setIsAnalyzing(false);
     }
   };
 
