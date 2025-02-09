@@ -15,17 +15,29 @@ export interface CardGradingResult {
 }
 
 const preprocessImage = async (imageData: string): Promise<tf.Tensor3D> => {
-  const img = new Image();
-  img.src = imageData;
-  await new Promise(resolve => img.onload = resolve);
-  
-  const tensor = tf.browser.fromPixels(img)
-    .resizeNearestNeighbor([224, 224])
-    .toFloat()
-    .expandDims(0)
-    .div(255.0);
-    
-  return tensor.squeeze() as tf.Tensor3D;
+  try {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const imageLoaded = new Promise((resolve, reject) => {
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Failed to load image'));
+    });
+    img.src = imageData;
+    const loadedImg = await imageLoaded;
+    if (loadedImg instanceof HTMLImageElement && loadedImg.width > 0 && loadedImg.height > 0) {
+      const tensor = tf.browser.fromPixels(loadedImg)
+        .resizeNearestNeighbor([224, 224])
+        .toFloat()
+        .expandDims(0)
+        .div(255.0);
+      return tensor.squeeze() as tf.Tensor3D;
+    } else {
+      throw new Error('Invalid image dimensions');
+    }
+  } catch (error) {
+    console.error('Error preprocessing image:', error);
+    throw new Error(`Error preprocessing image: ${error.message}`);
+  }
 };
 
 const calculateCentering = (tensor: tf.Tensor3D): number => {
@@ -117,10 +129,15 @@ const calculateSurfaceScore = (tensor: tf.Tensor3D): number => {
 };
 
 const performOCR = async (imageData: string): Promise<string> => {
-  const worker = await Tesseract.createWorker('eng');
-  const result = await worker.recognize(imageData);
-  await worker.terminate();
-  return result.data.text;
+  try {
+    const worker = await Tesseract.createWorker('eng');
+    const result = await worker.recognize(imageData);
+    await worker.terminate();
+    return result.data.text;
+  } catch (error) {
+    console.error('OCR error:', error);
+    return ''; // Return empty string on error to avoid breaking the flow
+  }
 };
 
 export const analyzeCard = async (
@@ -128,6 +145,10 @@ export const analyzeCard = async (
   backImage: string
 ): Promise<CardGradingResult> => {
   try {
+    if (!frontImage || !backImage) {
+      throw new Error('Both front and back images are required');
+    }
+
     const tensorFront = await preprocessImage(frontImage);
     
     const [centeringScore, cornersScore, edgesScore, surfaceScore] = await Promise.all([
