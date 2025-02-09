@@ -36,7 +36,6 @@ const Index = () => {
   const preprocessImage = async (imageData: string): Promise<Blob> => {
     const response = await fetch(imageData);
     const blob = await response.blob();
-    
     return blob;
   };
 
@@ -78,8 +77,7 @@ const Index = () => {
               );
               
               setAnalysis(result);
-              const salesData = await fetchEbaySales(result);
-              setSalesHistory(salesData);
+              await fetchEbaySales(result);
               toast.success("Card analysis complete!");
             } catch (error) {
               toast.error("Error analyzing card");
@@ -131,49 +129,21 @@ const Index = () => {
     }
   };
 
-  const fetchEbaySales = async (cardDetails: CardAnalysis): Promise<EbaySale[]> => {
-    try {
-      const response = await fetch('https://api.ebay.com/buy/browse/v1/item_summary/search', {
-        headers: {
-          'Authorization': 'Bearer YOUR_EBAY_TOKEN',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('eBay API request failed');
-      
-      const data = await response.json();
-      return data.sales || [
-        { price: 149.99, date: "2024-02-15", condition: "Near Mint", link: "https://ebay.com/item1" },
-        { price: 134.99, date: "2024-02-10", condition: "Excellent", link: "https://ebay.com/item2" },
-        { price: 159.99, date: "2024-02-05", condition: "Near Mint", link: "https://ebay.com/item3" },
-      ];
-    } catch (error) {
-      console.error("eBay API error:", error);
-      throw error;
-    }
+  const fetchEbaySales = async (cardDetails: CardAnalysis): Promise<void> => {
+    const mockSales: EbaySale[] = [
+      { price: 149.99, date: "2024-02-15", condition: "Near Mint", link: "https://ebay.com/item1" },
+      { price: 134.99, date: "2024-02-10", condition: "Excellent", link: "https://ebay.com/item2" },
+      { price: 159.99, date: "2024-02-05", condition: "Near Mint", link: "https://ebay.com/item3" },
+    ];
+    setSalesHistory(mockSales);
   };
 
   const handleList = async () => {
     if (!analysis) return;
     
     try {
-      const response = await fetch('https://api.ebay.com/sell/inventory/v1/inventory_item', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer YOUR_EBAY_TOKEN',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          images,
-          analysis,
-          salesHistory
-        })
-      });
-
-      if (!response.ok) throw new Error('eBay listing creation failed');
-      
-      toast.success("Creating eBay listing...");
+      toast.success("Creating mock eBay listing...");
+      // In a real app, this would call the eBay API through a backend proxy
     } catch (error) {
       toast.error("Error creating listing");
       console.error("Listing error:", error);
@@ -273,7 +243,7 @@ const Index = () => {
                 {Object.entries(analysis).map(([key, value]) => (
                   <div key={key} className="flex justify-between items-center">
                     <span className="capitalize text-gray-600">{key}</span>
-                    <span className="font-medium">{value.toFixed(1)}</span>
+                    <span className="font-medium">{typeof value === 'number' ? value.toFixed(1) : 'N/A'}</span>
                   </div>
                 ))}
               </div>
@@ -290,7 +260,7 @@ const Index = () => {
                         <span className="text-gray-400 mx-2">•</span>
                         <span className="text-gray-600">{sale.condition}</span>
                       </div>
-                      <span className="font-medium">${sale.price}</span>
+                      <span className="font-medium">${sale.price.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
