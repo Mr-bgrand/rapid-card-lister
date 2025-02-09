@@ -16,6 +16,7 @@ interface CardAnalysis {
     number: string;
     type?: string;
     rarity?: string;
+    cardType?: string;
   };
 }
 
@@ -329,9 +330,20 @@ const Index = () => {
             className="mb-6"
           >
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-100">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800 flex items-center">
-                <ImageIcon className="w-5 h-5 mr-2 text-purple-500" />
-                Identified Card
+              <h3 className="text-lg font-semibold mb-4 text-gray-800 flex items-center justify-between">
+                <div className="flex items-center">
+                  <ImageIcon className="w-5 h-5 mr-2 text-purple-500" />
+                  Identified Card
+                </div>
+                {analysis.cardDetails.isConfirmed ? (
+                  <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                    Confirmed
+                  </span>
+                ) : (
+                  <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                    Unconfirmed
+                  </span>
+                )}
               </h3>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
@@ -358,6 +370,10 @@ const Index = () => {
                     <span className="font-medium text-gray-800">{analysis.cardDetails.rarity}</span>
                   </div>
                 )}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Card Type</span>
+                  <span className="font-medium text-gray-800 capitalize">{analysis.cardDetails.cardType || 'Unknown'}</span>
+                </div>
               </div>
             </div>
           </motion.div>

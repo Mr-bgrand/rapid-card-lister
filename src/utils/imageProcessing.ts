@@ -7,6 +7,11 @@ export interface CardDetails {
   number: string;
   type?: string;
   rarity?: string;
+  isConfirmed?: boolean;
+  cardType?: 'sports' | 'trading';
+  tcgplayerId?: string;
+  sportsCardId?: string;
+  imageUrl?: string;
 }
 
 export interface CardGradingResult {
@@ -153,27 +158,34 @@ const extractCardText = async (imageData: string): Promise<CardDetails> => {
     const text = result.data.text;
     const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
     
-    // Look for patterns that typically indicate card details
     const cardInfo: CardDetails = {
       name: '',
       set: '',
       number: '',
+      isConfirmed: false
     };
 
-    // Extract player name (usually in larger text near the top)
-    cardInfo.name = lines[0] || 'Unknown Card';
+    const possibleNames = lines.slice(0, 3).filter(line => 
+      line.length > 3 && 
+      !line.includes('©') && 
+      !line.match(/\d{3,}/) && 
+      !line.toLowerCase().includes('set') &&
+      !line.toLowerCase().includes('series')
+    );
     
-    // Look for card number (usually in format ###/### or just ###)
+    if (possibleNames.length > 0) {
+      cardInfo.name = possibleNames[0];
+    }
+
     const numberPattern = /(\d+\/\d+|\d+)/;
     for (const line of lines) {
       const match = line.match(numberPattern);
-      if (match) {
+      if (match && !line.toLowerCase().includes('year') && !line.toLowerCase().includes('season')) {
         cardInfo.number = match[0];
         break;
       }
     }
 
-    // Look for set name (usually includes "Set" or appears with ©)
     const setPattern = /(set|series|©.*?)\s*(.*)/i;
     for (const line of lines) {
       const match = line.match(setPattern);
@@ -183,6 +195,16 @@ const extractCardText = async (imageData: string): Promise<CardDetails> => {
       }
     }
 
+    const sportKeywords = ['rookie', 'season', 'stats', 'team', 'record'];
+    const tradingKeywords = ['pokemon', 'magic', 'yugioh', 'mtg'];
+    
+    const textLower = text.toLowerCase();
+    if (sportKeywords.some(keyword => textLower.includes(keyword))) {
+      cardInfo.cardType = 'sports';
+    } else if (tradingKeywords.some(keyword => textLower.includes(keyword))) {
+      cardInfo.cardType = 'trading';
+    }
+
     return cardInfo;
   } catch (error) {
     console.error('Text extraction error:', error);
@@ -190,7 +212,28 @@ const extractCardText = async (imageData: string): Promise<CardDetails> => {
       name: 'Unknown Card',
       set: 'Unknown Set',
       number: 'Unknown',
+      isConfirmed: false
     };
+  }
+};
+
+const searchTCGPlayer = async (cardName: string, setName: string): Promise<Partial<CardDetails> | null> => {
+  try {
+    console.log('Searching TCGPlayer for:', cardName, setName);
+    return null;
+  } catch (error) {
+    console.error('TCGPlayer search error:', error);
+    return null;
+  }
+};
+
+const searchSportsCard = async (playerName: string, cardNumber: string): Promise<Partial<CardDetails> | null> => {
+  try {
+    console.log('Searching sports card database for:', playerName, cardNumber);
+    return null;
+  } catch (error) {
+    console.error('Sports card search error:', error);
+    return null;
   }
 };
 
@@ -209,7 +252,6 @@ export const analyzeCard = async (
       onProgress?.("Text Extraction", "Reading back card text...");
       const backDetails = await extractCardText(backImage);
       
-      // Merge front and back details, preferring front for name
       cardDetails = {
         ...cardDetails,
         number: backDetails.number || cardDetails.number,
@@ -217,9 +259,22 @@ export const analyzeCard = async (
       };
     }
 
-    onProgress?.("Text Extraction", `Found card: ${cardDetails.name}`);
+    onProgress?.("Card Identification", "Attempting to match card...");
+    
+    if (cardDetails.cardType === 'trading') {
+      const tcgMatch = await searchTCGPlayer(cardDetails.name, cardDetails.set);
+      if (tcgMatch) {
+        cardDetails = { ...cardDetails, ...tcgMatch, isConfirmed: true };
+      }
+    } else if (cardDetails.cardType === 'sports') {
+      const sportsMatch = await searchSportsCard(cardDetails.name, cardDetails.number);
+      if (sportsMatch) {
+        cardDetails = { ...cardDetails, ...sportsMatch, isConfirmed: true };
+      }
+    }
 
-    // Only proceed with full analysis if back image is provided
+    onProgress?.("Text Extraction", `Found card: ${cardDetails.name} (${cardDetails.isConfirmed ? 'Confirmed' : 'Unconfirmed'})`);
+
     if (!backImage) {
       return {
         centering: 0,
