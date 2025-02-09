@@ -1,3 +1,4 @@
+
 import { useState, useRef } from "react";
 import { Camera, X, Share2, ArrowRight, Upload, Loader2, Image as ImageIcon, DollarSign, TrendingUp, TrendingDown, ChartBar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,6 +18,7 @@ interface CardAnalysis {
     type?: string;
     rarity?: string;
     cardType?: string;
+    isConfirmed?: boolean;
   };
 }
 
@@ -496,3 +498,4 @@ const Index = () => {
 };
 
 export default Index;
+
