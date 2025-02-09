@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Camera, X, Share2, ArrowRight, Upload, Loader2, Image as ImageIcon, DollarSign, TrendingUp, TrendingDown, ChartBar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,22 +20,24 @@ interface EbaySale {
 }
 
 const Index = () => {
-  const [images, setImages] = useState<{
+  const [images, setImages<{
     front: string | null;
     back: string | null;
   }>({
     front: null,
     back: null,
   });
-  const [analysis, setAnalysis] = useState<CardAnalysis | null>(null);
-  const [salesHistory, setSalesHistory] = useState<EbaySale[]>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [setList, setSetList] = useState<File | null>(null);
-  const [analysisSteps, setAnalysisSteps] = useState<{
+  const [analysis, setAnalysis<CardAnalysis | null>(null);
+  const [salesHistory, setSalesHistory<EbaySale[]>([]);
+  const [isAnalyzing, setIsAnalyzing(false);
+  const [setList, setSetList<File | null>(null);
+  const [analysisSteps, setAnalysisSteps<{
     step: string;
     details: string;
     completed: boolean;
-  }[]>([]);
+  }[]>([
+    
+  ]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const preprocessImage = async (imageData: string): Promise<Blob> => {
@@ -74,23 +75,47 @@ const Index = () => {
           const imageData = e.target?.result as string;
           setImages((prev) => ({ ...prev, [type]: imageData }));
 
-          if (type === "back" && images.front || type === "front" && images.back) {
+          if (type === "front") {
             setIsAnalyzing(true);
-            setAnalysisSteps([]);
+            setAnalysisSteps([
+              { step: "Text Extraction", details: "Reading card information...", completed: false },
+            ]);
             try {
-              setAnalysisSteps([
-                { step: "Image Processing", details: "Preparing images for analysis...", completed: false },
-                { step: "Centering Analysis", details: "Calculating card centering...", completed: false },
-                { step: "Surface Analysis", details: "Analyzing surface condition...", completed: false },
-                { step: "Edge Detection", details: "Examining card edges...", completed: false },
-                { step: "Corner Analysis", details: "Evaluating corner conditions...", completed: false },
-                { step: "Text Extraction", details: "Reading card information...", completed: false },
-                { step: "Market Research", details: "Gathering sales data...", completed: false }
-              ]);
+              const result = await analyzeCard(imageData, "", (step: string, details: string) => {
+                setAnalysisSteps(prev => {
+                  const stepExists = prev.find(s => s.step === step);
+                  if (stepExists) {
+                    return prev.map(s => s.step === step ? { ...s, details, completed: true } : s);
+                  }
+                  return [...prev, { step, details, completed: false }];
+                });
+              });
+              // Just extract text for now, don't set full analysis
+              setAnalysis(null);
+            } catch (error) {
+              toast.error("Error reading card information");
+              console.error("Text extraction error:", error);
+            } finally {
+              setIsAnalyzing(false);
+            }
+          }
 
+          if (type === "back" && images.front) {
+            setIsAnalyzing(true);
+            setAnalysisSteps([
+              { step: "Text Extraction", details: "Reading card information...", completed: false },
+              { step: "Image Processing", details: "Preparing images for analysis...", completed: false },
+              { step: "Centering Analysis", details: "Calculating card centering...", completed: false },
+              { step: "Surface Analysis", details: "Analyzing surface condition...", completed: false },
+              { step: "Edge Detection", details: "Examining card edges...", completed: false },
+              { step: "Corner Analysis", details: "Evaluating corner conditions...", completed: false },
+              { step: "Market Research", details: "Gathering sales data...", completed: false }
+            ]);
+
+            try {
               const result = await analyzeCard(
-                type === "front" ? imageData : images.front!,
-                type === "back" ? imageData : images.back!,
+                images.front,
+                imageData,
                 (step: string, details: string) => {
                   setAnalysisSteps(prev => prev.map(s => 
                     s.step === step ? { ...s, details, completed: true } : s
@@ -285,6 +310,47 @@ const Index = () => {
                     </motion.div>
                   ))}
                 </AnimatePresence>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {analysis?.cardDetails && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-100">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800 flex items-center">
+                <ImageIcon className="w-5 h-5 mr-2 text-purple-500" />
+                Identified Card
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Name</span>
+                  <span className="font-medium text-gray-800">{analysis.cardDetails.name}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Set</span>
+                  <span className="font-medium text-gray-800">{analysis.cardDetails.set}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Number</span>
+                  <span className="font-medium text-gray-800">#{analysis.cardDetails.number}</span>
+                </div>
+                {analysis.cardDetails.type && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Type</span>
+                    <span className="font-medium text-gray-800">{analysis.cardDetails.type}</span>
+                  </div>
+                )}
+                {analysis.cardDetails.rarity && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Rarity</span>
+                    <span className="font-medium text-gray-800">{analysis.cardDetails.rarity}</span>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

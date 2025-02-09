@@ -1,4 +1,3 @@
-
 import * as tf from '@tensorflow/tfjs';
 import Tesseract from 'tesseract.js';
 
@@ -9,9 +8,11 @@ export interface CardGradingResult {
   surface: number;
   grade: number;
   cardDetails?: {
-    name?: string;
-    set?: string;
-    number?: string;
+    name: string;
+    set: string;
+    number: string;
+    type?: string;
+    rarity?: string;
   };
 }
 
@@ -141,61 +142,82 @@ const performOCR = async (imageData: string): Promise<string> => {
   }
 };
 
+const extractCardText = async (imageData: string): Promise<{
+  name: string;
+  set: string;
+  number: string;
+  type?: string;
+  rarity?: string;
+}> => {
+  try {
+    const worker = await Tesseract.createWorker('eng');
+    const result = await worker.recognize(imageData);
+    await worker.terminate();
+
+    const text = result.data.text;
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+
+    // Basic card information extraction
+    const cardInfo = {
+      name: lines[0] || 'Unknown Card',
+      set: lines.find(line => line.includes('Set:') || line.includes('Series:'))?.replace(/(Set:|Series:)/gi, '').trim() || 'Unknown Set',
+      number: lines.find(line => /^(?:#|\d+)/.test(line))?.match(/\d+/)?.[0] || 'Unknown',
+      type: lines.find(line => /(Pokémon|Trainer|Energy)/i.test(line))?.trim(),
+      rarity: lines.find(line => /(Common|Uncommon|Rare|Holo|Ultra Rare)/i.test(line))?.trim()
+    };
+
+    return cardInfo;
+  } catch (error) {
+    console.error('Text extraction error:', error);
+    return {
+      name: 'Unknown Card',
+      set: 'Unknown Set',
+      number: 'Unknown',
+    };
+  }
+};
+
 export const analyzeCard = async (
   frontImage: string,
   backImage: string,
   onProgress?: (step: string, details: string) => void
 ): Promise<CardGradingResult> => {
   try {
-    if (!frontImage || !backImage) {
-      throw new Error('Both front and back images are required');
-    }
+    onProgress?.("Text Extraction", "Reading card information...");
+    const cardDetails = await extractCardText(frontImage);
+    onProgress?.("Text Extraction", `Identified: ${cardDetails.name} from ${cardDetails.set}`);
 
     onProgress?.("Image Processing", "Converting images to tensors...");
     const tensorFront = await preprocessImage(frontImage);
     
-    onProgress?.("Centering Analysis", "Calculating horizontal and vertical alignment...");
+    onProgress?.("Centering Analysis", "Calculating alignment...");
     const centeringScore = await calculateCentering(tensorFront);
     onProgress?.("Centering Analysis", `Centering score: ${centeringScore.toFixed(1)}/10`);
     
-    onProgress?.("Corner Analysis", "Detecting corner wear and damage...");
+    onProgress?.("Corner Analysis", "Evaluating corner conditions...");
     const cornersScore = await calculateCornersScore(tensorFront);
     onProgress?.("Corner Analysis", `Corner condition score: ${cornersScore.toFixed(1)}/10`);
     
-    onProgress?.("Edge Detection", "Measuring edge sharpness and wear...");
+    onProgress?.("Edge Detection", "Measuring edge sharpness...");
     const edgesScore = await calculateEdgesScore(tensorFront);
     onProgress?.("Edge Detection", `Edge condition score: ${edgesScore.toFixed(1)}/10`);
     
-    onProgress?.("Surface Analysis", "Evaluating surface texture and scratches...");
+    onProgress?.("Surface Analysis", "Analyzing surface texture...");
     const surfaceScore = await calculateSurfaceScore(tensorFront);
     onProgress?.("Surface Analysis", `Surface condition score: ${surfaceScore.toFixed(1)}/10`);
-    
-    onProgress?.("Text Extraction", "Reading card text and identifiers...");
-    const [frontText, backText] = await Promise.all([
-      performOCR(frontImage),
-      performOCR(backImage)
-    ]);
-    
+
     const grade = (centeringScore + cornersScore + edgesScore + surfaceScore) / 4;
-    onProgress?.("Text Extraction", "Card information extracted successfully");
     
     tensorFront.dispose();
     
-    const result = {
+    return {
       centering: Number(centeringScore.toFixed(1)),
       corners: Number(cornersScore.toFixed(1)),
       edges: Number(edgesScore.toFixed(1)),
       surface: Number(surfaceScore.toFixed(1)),
       grade: Number(grade.toFixed(1)),
-      cardDetails: {
-        name: extractCardName(frontText),
-        set: extractSetInfo(backText),
-        number: extractCardNumber(backText)
-      }
+      cardDetails
     };
-
-    onProgress?.("Market Research", "Analysis complete - Ready for market comparison");
-    return result;
   } catch (error) {
     console.error('Error analyzing card:', error);
     throw error;
