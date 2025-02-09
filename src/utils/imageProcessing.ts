@@ -1,3 +1,4 @@
+
 import * as tf from '@tensorflow/tfjs';
 import Tesseract from 'tesseract.js';
 
@@ -142,32 +143,45 @@ const performOCR = async (imageData: string): Promise<string> => {
 
 export const analyzeCard = async (
   frontImage: string,
-  backImage: string
+  backImage: string,
+  onProgress?: (step: string, details: string) => void
 ): Promise<CardGradingResult> => {
   try {
     if (!frontImage || !backImage) {
       throw new Error('Both front and back images are required');
     }
 
+    onProgress?.("Image Processing", "Converting images to tensors...");
     const tensorFront = await preprocessImage(frontImage);
     
-    const [centeringScore, cornersScore, edgesScore, surfaceScore] = await Promise.all([
-      calculateCentering(tensorFront),
-      calculateCornersScore(tensorFront),
-      calculateEdgesScore(tensorFront),
-      calculateSurfaceScore(tensorFront)
-    ]);
+    onProgress?.("Centering Analysis", "Calculating horizontal and vertical alignment...");
+    const centeringScore = await calculateCentering(tensorFront);
+    onProgress?.("Centering Analysis", `Centering score: ${centeringScore.toFixed(1)}/10`);
     
+    onProgress?.("Corner Analysis", "Detecting corner wear and damage...");
+    const cornersScore = await calculateCornersScore(tensorFront);
+    onProgress?.("Corner Analysis", `Corner condition score: ${cornersScore.toFixed(1)}/10`);
+    
+    onProgress?.("Edge Detection", "Measuring edge sharpness and wear...");
+    const edgesScore = await calculateEdgesScore(tensorFront);
+    onProgress?.("Edge Detection", `Edge condition score: ${edgesScore.toFixed(1)}/10`);
+    
+    onProgress?.("Surface Analysis", "Evaluating surface texture and scratches...");
+    const surfaceScore = await calculateSurfaceScore(tensorFront);
+    onProgress?.("Surface Analysis", `Surface condition score: ${surfaceScore.toFixed(1)}/10`);
+    
+    onProgress?.("Text Extraction", "Reading card text and identifiers...");
     const [frontText, backText] = await Promise.all([
       performOCR(frontImage),
       performOCR(backImage)
     ]);
     
     const grade = (centeringScore + cornersScore + edgesScore + surfaceScore) / 4;
+    onProgress?.("Text Extraction", "Card information extracted successfully");
     
     tensorFront.dispose();
     
-    return {
+    const result = {
       centering: Number(centeringScore.toFixed(1)),
       corners: Number(cornersScore.toFixed(1)),
       edges: Number(edgesScore.toFixed(1)),
@@ -179,6 +193,9 @@ export const analyzeCard = async (
         number: extractCardNumber(backText)
       }
     };
+
+    onProgress?.("Market Research", "Analysis complete - Ready for market comparison");
+    return result;
   } catch (error) {
     console.error('Error analyzing card:', error);
     throw error;

@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Camera, X, Share2, ArrowRight, Upload, Loader2, Image as ImageIcon } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { analyzeCard, type CardGradingResult } from '../utils/imageProcessing';
 
@@ -31,6 +31,11 @@ const Index = () => {
   const [salesHistory, setSalesHistory] = useState<EbaySale[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [setList, setSetList] = useState<File | null>(null);
+  const [analysisSteps, setAnalysisSteps] = useState<{
+    step: string;
+    details: string;
+    completed: boolean;
+  }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const preprocessImage = async (imageData: string): Promise<Blob> => {
@@ -70,10 +75,26 @@ const Index = () => {
 
           if (type === "back" && images.front || type === "front" && images.back) {
             setIsAnalyzing(true);
+            setAnalysisSteps([]);
             try {
+              setAnalysisSteps([
+                { step: "Image Processing", details: "Preparing images for analysis...", completed: false },
+                { step: "Centering Analysis", details: "Calculating card centering...", completed: false },
+                { step: "Surface Analysis", details: "Analyzing surface condition...", completed: false },
+                { step: "Edge Detection", details: "Examining card edges...", completed: false },
+                { step: "Corner Analysis", details: "Evaluating corner conditions...", completed: false },
+                { step: "Text Extraction", details: "Reading card information...", completed: false },
+                { step: "Market Research", details: "Gathering sales data...", completed: false }
+              ]);
+
               const result = await analyzeCard(
                 type === "front" ? imageData : images.front!,
-                type === "back" ? imageData : images.back!
+                type === "back" ? imageData : images.back!,
+                (step: string, details: string) => {
+                  setAnalysisSteps(prev => prev.map(s => 
+                    s.step === step ? { ...s, details, completed: true } : s
+                  ));
+                }
               );
               
               setAnalysis(result);
@@ -230,6 +251,46 @@ const Index = () => {
             />
           </label>
         </motion.div>
+
+        {isAnalyzing && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <h3 className="text-lg font-semibold mb-3">Analysis in Progress</h3>
+              <div className="space-y-3">
+                <AnimatePresence>
+                  {analysisSteps.map((step, index) => (
+                    <motion.div
+                      key={step.step}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      className="flex items-center space-x-3"
+                    >
+                      <div className={`w-2 h-2 rounded-full ${step.completed ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-700">{step.step}</p>
+                        <p className="text-xs text-gray-500">{step.details}</p>
+                      </div>
+                      {step.completed && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="text-green-500"
+                        >
+                          ✓
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {analysis && (
           <motion.div
