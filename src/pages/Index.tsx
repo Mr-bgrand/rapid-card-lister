@@ -1,3 +1,4 @@
+
 import { useState, useRef } from "react";
 import { Camera, X, Share2, ArrowRight, Upload, Loader2, Image as ImageIcon, DollarSign, TrendingUp, TrendingDown, ChartBar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,24 +21,24 @@ interface EbaySale {
 }
 
 const Index = () => {
-  const [images, setImages<{
+  const [images, setImages] = useState<{
     front: string | null;
     back: string | null;
   }>({
     front: null,
     back: null,
   });
-  const [analysis, setAnalysis<CardAnalysis | null>(null);
-  const [salesHistory, setSalesHistory<EbaySale[]>([]);
-  const [isAnalyzing, setIsAnalyzing(false);
-  const [setList, setSetList<File | null>(null);
-  const [analysisSteps, setAnalysisSteps<{
+  
+  const [analysis, setAnalysis] = useState<CardAnalysis | null>(null);
+  const [salesHistory, setSalesHistory] = useState<EbaySale[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [setList, setSetList] = useState<File | null>(null);
+  const [analysisSteps, setAnalysisSteps] = useState<{
     step: string;
     details: string;
     completed: boolean;
-  }[]>([
-    
-  ]);
+  }[]>([]);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const preprocessImage = async (imageData: string): Promise<Blob> => {
@@ -473,3 +474,4 @@ const Index = () => {
 };
 
 export default Index;
+
