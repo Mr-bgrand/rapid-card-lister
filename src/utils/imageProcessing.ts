@@ -1,19 +1,21 @@
 import * as tf from '@tensorflow/tfjs';
 import Tesseract from 'tesseract.js';
 
+export interface CardDetails {
+  name: string;
+  set: string;
+  number: string;
+  type?: string;
+  rarity?: string;
+}
+
 export interface CardGradingResult {
   centering: number;
   corners: number;
   edges: number;
   surface: number;
   grade: number;
-  cardDetails?: {
-    name: string;
-    set: string;
-    number: string;
-    type?: string;
-    rarity?: string;
-  };
+  cardDetails?: CardDetails;
 }
 
 const preprocessImage = async (imageData: string): Promise<tf.Tensor3D> => {
@@ -142,13 +144,7 @@ const performOCR = async (imageData: string): Promise<string> => {
   }
 };
 
-const extractCardText = async (imageData: string): Promise<{
-  name: string;
-  set: string;
-  number: string;
-  type?: string;
-  rarity?: string;
-}> => {
+const extractCardText = async (imageData: string): Promise<CardDetails> => {
   try {
     const worker = await Tesseract.createWorker('eng');
     const result = await worker.recognize(imageData);
@@ -156,15 +152,36 @@ const extractCardText = async (imageData: string): Promise<{
 
     const text = result.data.text;
     const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
-
-    // Basic card information extraction
-    const cardInfo = {
-      name: lines[0] || 'Unknown Card',
-      set: lines.find(line => line.includes('Set:') || line.includes('Series:'))?.replace(/(Set:|Series:)/gi, '').trim() || 'Unknown Set',
-      number: lines.find(line => /^(?:#|\d+)/.test(line))?.match(/\d+/)?.[0] || 'Unknown',
-      type: lines.find(line => /(Pokémon|Trainer|Energy)/i.test(line))?.trim(),
-      rarity: lines.find(line => /(Common|Uncommon|Rare|Holo|Ultra Rare)/i.test(line))?.trim()
+    
+    // Look for patterns that typically indicate card details
+    const cardInfo: CardDetails = {
+      name: '',
+      set: '',
+      number: '',
     };
+
+    // Extract player name (usually in larger text near the top)
+    cardInfo.name = lines[0] || 'Unknown Card';
+    
+    // Look for card number (usually in format ###/### or just ###)
+    const numberPattern = /(\d+\/\d+|\d+)/;
+    for (const line of lines) {
+      const match = line.match(numberPattern);
+      if (match) {
+        cardInfo.number = match[0];
+        break;
+      }
+    }
+
+    // Look for set name (usually includes "Set" or appears with ©)
+    const setPattern = /(set|series|©.*?)\s*(.*)/i;
+    for (const line of lines) {
+      const match = line.match(setPattern);
+      if (match) {
+        cardInfo.set = match[2]?.trim() || 'Unknown Set';
+        break;
+      }
+    }
 
     return cardInfo;
   } catch (error) {
@@ -183,28 +200,50 @@ export const analyzeCard = async (
   onProgress?: (step: string, details: string) => void
 ): Promise<CardGradingResult> => {
   try {
-    onProgress?.("Text Extraction", "Reading card information...");
-    const cardDetails = await extractCardText(frontImage);
-    onProgress?.("Text Extraction", `Identified: ${cardDetails.name} from ${cardDetails.set}`);
+    onProgress?.("Text Extraction", "Reading front card text...");
+    const frontDetails = await extractCardText(frontImage);
+    
+    let cardDetails = frontDetails;
+    
+    if (backImage) {
+      onProgress?.("Text Extraction", "Reading back card text...");
+      const backDetails = await extractCardText(backImage);
+      
+      // Merge front and back details, preferring front for name
+      cardDetails = {
+        ...cardDetails,
+        number: backDetails.number || cardDetails.number,
+        set: backDetails.set || cardDetails.set,
+      };
+    }
 
-    onProgress?.("Image Processing", "Converting images to tensors...");
+    onProgress?.("Text Extraction", `Found card: ${cardDetails.name}`);
+
+    // Only proceed with full analysis if back image is provided
+    if (!backImage) {
+      return {
+        centering: 0,
+        corners: 0,
+        edges: 0,
+        surface: 0,
+        grade: 0,
+        cardDetails
+      };
+    }
+
     const tensorFront = await preprocessImage(frontImage);
     
     onProgress?.("Centering Analysis", "Calculating alignment...");
-    const centeringScore = await calculateCentering(tensorFront);
-    onProgress?.("Centering Analysis", `Centering score: ${centeringScore.toFixed(1)}/10`);
+    const centeringScore = calculateCentering(tensorFront);
     
     onProgress?.("Corner Analysis", "Evaluating corner conditions...");
     const cornersScore = await calculateCornersScore(tensorFront);
-    onProgress?.("Corner Analysis", `Corner condition score: ${cornersScore.toFixed(1)}/10`);
     
     onProgress?.("Edge Detection", "Measuring edge sharpness...");
-    const edgesScore = await calculateEdgesScore(tensorFront);
-    onProgress?.("Edge Detection", `Edge condition score: ${edgesScore.toFixed(1)}/10`);
+    const edgesScore = calculateEdgesScore(tensorFront);
     
     onProgress?.("Surface Analysis", "Analyzing surface texture...");
-    const surfaceScore = await calculateSurfaceScore(tensorFront);
-    onProgress?.("Surface Analysis", `Surface condition score: ${surfaceScore.toFixed(1)}/10`);
+    const surfaceScore = calculateSurfaceScore(tensorFront);
 
     const grade = (centeringScore + cornersScore + edgesScore + surfaceScore) / 4;
     

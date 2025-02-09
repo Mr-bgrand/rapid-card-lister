@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Camera, X, Share2, ArrowRight, Upload, Loader2, Image as ImageIcon, DollarSign, TrendingUp, TrendingDown, ChartBar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,6 +10,13 @@ interface CardAnalysis {
   corners: number;
   surface: number;
   edges: number;
+  cardDetails?: {
+    name: string;
+    set: string;
+    number: string;
+    type?: string;
+    rarity?: string;
+  };
 }
 
 interface EbaySale {
@@ -474,4 +480,3 @@ const Index = () => {
 };
 
 export default Index;
-
