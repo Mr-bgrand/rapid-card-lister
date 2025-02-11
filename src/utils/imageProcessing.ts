@@ -50,16 +50,71 @@ const preprocessImage = async (imageData: string): Promise<tf.Tensor3D> => {
 };
 
 const calculateCentering = (tensor: tf.Tensor3D): number => {
-  const moments = tf.moments(tensor);
-  const center = moments.mean.dataSync();
+  const grayscale = tf.tidy(() => tensor.mean(-1));
   
-  const idealCenter = [112, 112];
-  const distance = Math.sqrt(
-    Math.pow(center[0] - idealCenter[0], 2) + 
-    Math.pow(center[1] - idealCenter[1], 2)
-  );
+  const edges = tf.tidy(() => {
+    const sobelHKernel = tf.tensor4d([-1, 0, 1, -2, 0, 2, -1, 0, 1], [3, 3, 1, 1]);
+    const sobelVKernel = tf.tensor4d([-1, -2, -1, 0, 0, 0, 1, 2, 1], [3, 3, 1, 1]);
+    
+    const expandedGray = grayscale.expandDims(-1);
+    const sobelH = tf.conv2d(expandedGray as tf.Tensor4D, sobelHKernel, 1, 'same');
+    const sobelV = tf.conv2d(expandedGray as tf.Tensor4D, sobelVKernel, 1, 'same');
+    
+    return tf.sqrt(tf.add(tf.square(sobelH), tf.square(sobelV)));
+  });
+
+  const outerBounds = tf.tidy(() => {
+    const threshold = edges.mean().mul(1.5);
+    return edges.greater(threshold);
+  });
+
+  const outerMoments = tf.moments(outerBounds);
+  const innerMoments = tf.moments(grayscale);
   
-  return Math.max(0, 10 - (distance / 22.4));
+  const outerCenter = outerMoments.mean.dataSync();
+  const innerCenter = innerMoments.mean.dataSync();
+  
+  const dx = Math.abs(outerCenter[1] - innerCenter[1]);
+  const dy = Math.abs(outerCenter[0] - innerCenter[0]);
+  
+  const outerBox = tf.tidy(() => {
+    const coords = outerBounds.argMax(1).dataSync();
+    const width = Math.max(...coords) - Math.min(...coords);
+    const height = outerBounds.shape[0];
+    return { width, height };
+  });
+  
+  const innerBox = tf.tidy(() => {
+    const coords = grayscale.argMax(1).dataSync();
+    const width = Math.max(...coords) - Math.min(...coords);
+    const height = grayscale.shape[0];
+    return { width, height };
+  });
+
+  const smallValue = 1e-10;
+  
+  const ratioX = ((outerBox.width - innerBox.width) / 2 - dx) / 
+                 (((outerBox.width - innerBox.width) / 2 + dx) || smallValue);
+  
+  const ratioY = ((outerBox.height - innerBox.height) / 2 - dy) / 
+                 (((outerBox.height - innerBox.height) / 2 + dy) || smallValue);
+
+  grayscale.dispose();
+  edges.dispose();
+  outerBounds.dispose();
+  
+  const isGem = ratioX >= 0.7 && ratioX <= 1.4 && ratioY >= 0.7 && ratioY <= 1.4;
+  const averageRatio = (ratioX + ratioY) / 2;
+  
+  let score = 10;
+  if (!isGem) {
+    const deviation = Math.abs(1 - averageRatio);
+    score = Math.max(0, 10 - (deviation * 20));
+  }
+  
+  console.log(`Centering Ratios - X: ${ratioX.toFixed(3)}, Y: ${ratioY.toFixed(3)}, Score: ${score.toFixed(1)}`);
+  
+  return score;
 };
 
 const calculateCornersScore = async (tensor: tf.Tensor3D): Promise<number> => {
